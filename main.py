@@ -1,38 +1,50 @@
 from typing import List
 
-from fastapi import FastAPI
-from models import User, Gender, Role
+from fastapi import FastAPI, status, HTTPException
+
+import models_sql
+from database import SessionLocal
+from models_py import Item
 
 app = FastAPI()
 
-db: List[User] = [
-    User(
-        id="97099d4d-65ba-4f6b-ad90-4a262fdbb4cc",
-        first_name="Jamila",
-        last_name="Akhmed",
-        middle_name="",
-        gender=Gender.female,
-        roles=[Role.student]
-    ),
-    User(
-        id="1640af8d-44c3-4dd1-af08-997ed65a97a3",
-        first_name="Alex",
-        last_name="Jones",
-        middle_name="",
-        gender=Gender.male,
-        roles=[Role.admin, Role.user]
-    )
-]
+db = SessionLocal()
+
 
 @app.get("/")
 async def root():
     return {"Hello": "World"}
 
-@app.get("/api/v1/users")
-async def fetch_users():
-    return db
+@app.get('/items', response_model=List[Item], status_code=200)
+async def get_all_items():
+    items = db.query(models_sql.Item).all()
 
-@app.post("/api/v1/users")
-async def register_user(user: User):
-    db.append(user)
-    return {"id": user.id}
+    return items
+
+@app.post('/items', response_model=Item,
+          status_code=status.HTTP_201_CREATED)
+async def create_an_item(item: Item):
+    db_item = db.query(models_sql.Item).filter(models_sql.Item.name == item.name).first()
+
+    if db_item is not None:
+        raise HTTPException(status_code=400, detail="Item already exists")
+
+    new_item = models_sql.Item(
+        name=item.name,
+        price=item.price,
+        description=item.description,
+        on_offer=item.on_offer
+    )
+
+    db.add(new_item)
+    db.commit()
+
+    return new_item
+
+# def get_db():
+#     db = SessionLocal()
+#     try:
+#         yield db
+#     finally:
+#         db.close()
+
